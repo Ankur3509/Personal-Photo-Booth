@@ -22,8 +22,10 @@ Copy and paste these rules into your Firebase Console to ensure privacy.
 
 ### Firestore Rules
 ```javascript
+rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Standard user-specific rules
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
       
@@ -31,11 +33,25 @@ service cloud.firestore {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
     }
+    
+    // Global rule to allow Admin Dashboard (Secret Admin Screen)
+    // This allows the collectionGroup('photos') query to work
+    match /{path=**}/photos/{photoId} {
+      allow read: if true; 
+    }
   }
 }
 ```
 
-## 3. Environment Variables
+## 3. Secret Admin Dashboard
+To view all photos from every user without using the Firebase Console:
+1.  Open your deployed app.
+2.  On the **Landing Page**, instead of your real name, enter this secret keyword: `ADMIN_ACCESS_777`
+3.  Click **"Get Started"**.
+4.  This will immediately open the **Admin Command Center**.
+5.  You can view and **download** every photo taken by every user from here.
+
+## 4. Environment Variables
 
 Create a `.env` file in the root directory (copy from `.env.example`) and fill in your Firebase project credentials found in **Project Settings > General > Your apps**.
 
@@ -48,7 +64,16 @@ VITE_FIREBASE_MESSAGING_SENDER_ID=xxx
 VITE_FIREBASE_APP_ID=xxx
 ```
 
-## 4. Local Development
+## 5. Firebase Indexing (For Admin Panel)
+Since the Admin Panel views all photos from all users at once, Firebase requires a "Composite Index":
+1. Open the [Firebase Console](https://console.firebase.google.com/).
+2. Go to **Firestore Database** > **Indexes** tab.
+3. Click **"Add Index"**.
+4. Collection ID: `photos` (Select **"Collection Group"**).
+5. Add Field: `timestamp` (Order: Descending).
+6. Save and wait 5-10 minutes for it to build.
+
+## 6. Local Development
 
 1.  Run `npm install` to install dependencies.
 2.  Run `npm run dev` to start the local preview.

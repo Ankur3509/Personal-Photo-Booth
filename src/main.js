@@ -9,6 +9,7 @@ import { createNavbar } from './components/Navbar';
 import { createTemplateScreen } from './pages/TemplateScreen';
 import { createBoothScreen } from './pages/BoothScreen';
 import { createGalleryScreen } from './pages/GalleryScreen';
+import { createAdminScreen } from './pages/AdminScreen';
 
 // Main App State
 const state = {
@@ -22,6 +23,7 @@ const state = {
   isCapturing: false,
   countdown: 0,
   filterSettings: {
+    id: 'normal',
     brightness: 100,
     contrast: 100,
     saturation: 100,
@@ -96,6 +98,9 @@ function render() {
       break;
     case 'gallery':
       currentSection = createGalleryScreen();
+      break;
+    case 'admin':
+      currentSection = createAdminScreen();
       break;
     default:
       currentSection = null;

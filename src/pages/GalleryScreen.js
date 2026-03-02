@@ -76,7 +76,7 @@ export function createGalleryScreen() {
 
             const dlBtn = document.createElement('a');
             dlBtn.href = photo.imageUrl;
-            dlBtn.download = `snapbooth-${photo.id}.png`;
+            dlBtn.download = `snapbooth-${photo.id}.jpg`; // Changed to jpg
             dlBtn.className = "p-3 bg-white/10 backdrop-blur-md rounded-full hover:bg-white/30 transition-all border border-white/20";
             dlBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>`;
 
@@ -93,7 +93,7 @@ export function createGalleryScreen() {
             };
 
             imgContainer.onclick = () => {
-                window.open(photo.imageUrl, '_blank');
+                showModal(photo.imageUrl);
             };
 
             actions.appendChild(dlBtn);
@@ -127,4 +127,22 @@ export function createGalleryScreen() {
     section.appendChild(grid);
 
     return section;
+}
+
+function showModal(url) {
+    const modal = document.createElement('div');
+    modal.className = "fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-4 backdrop-blur-md animate-in fade-in duration-300";
+    modal.onclick = () => modal.remove();
+
+    const img = document.createElement('img');
+    img.src = url;
+    img.className = "max-h-full max-w-full rounded-xl shadow-2xl scale-in ring-1 ring-white/20";
+
+    const close = document.createElement('button');
+    close.className = "absolute top-6 right-6 text-white bg-white/10 p-3 rounded-full hover:bg-white/20";
+    close.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>`;
+
+    modal.appendChild(img);
+    modal.appendChild(close);
+    document.body.appendChild(modal);
 }

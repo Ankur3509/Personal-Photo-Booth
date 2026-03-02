@@ -35,9 +35,20 @@ body {
 ::-webkit-scrollbar {
   width: 8px;
 }
+
 ::-webkit-scrollbar-track {
   @apply bg-dark;
 }
+
 ::-webkit-scrollbar-thumb {
   @apply bg-white bg-opacity-20 rounded-full hover:bg-opacity-30 transition-all;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
