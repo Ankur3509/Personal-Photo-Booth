@@ -1,9 +1,12 @@
 export async function getCamera() {
+    // Detect mobile and request appropriate resolution
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
     const constraints = {
         video: {
             facingMode: "user",
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
+            width: { ideal: isMobile ? 720 : 1280 },
+            height: { ideal: isMobile ? 1280 : 720 }
         }
     };
 
@@ -39,4 +42,9 @@ export function countdown(seconds, onTick, onComplete) {
     }, 1000);
 
     return timer;
+}
+
+/** Detect if current device is mobile */
+export function isMobileDevice() {
+    return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.innerWidth < 768;
 }

@@ -1,11 +1,13 @@
 export const filterPresets = [
-    { id: 'normal', name: 'Normal', settings: { brightness: 100, contrast: 100, saturation: 100, sepia: 0, hueRotate: 0, blur: 0 } },
-    { id: 'vivid', name: 'Vivid', settings: { brightness: 110, contrast: 110, saturation: 130, sepia: 0, hueRotate: 0, blur: 0 } },
-    { id: 'vintage', name: 'Vintage', settings: { brightness: 100, contrast: 90, saturation: 80, sepia: 30, hueRotate: 0, blur: 0 } },
-    { id: 'bw', name: 'Mono', settings: { brightness: 100, contrast: 120, saturation: 0, sepia: 0, hueRotate: 0, blur: 0 } },
-    { id: 'dreamy', name: 'Dreamy', settings: { brightness: 110, contrast: 90, saturation: 90, sepia: 10, hueRotate: 0, blur: 1.5 } },
-    { id: 'sunset', name: 'Sunset', settings: { brightness: 100, contrast: 100, saturation: 120, sepia: 0, hueRotate: 340, blur: 0 } },
-    { id: 'cool', name: 'Cool', settings: { brightness: 100, contrast: 100, saturation: 110, sepia: 0, hueRotate: 180, blur: 0 } }
+    { id: 'normal', name: 'Normal', icon: '🔘', settings: { brightness: 100, contrast: 100, saturation: 100, sepia: 0, hueRotate: 0, blur: 0 } },
+    { id: 'vivid', name: 'Vivid', icon: '🌈', settings: { brightness: 110, contrast: 110, saturation: 130, sepia: 0, hueRotate: 0, blur: 0 } },
+    { id: 'vintage', name: 'Vintage', icon: '📷', settings: { brightness: 100, contrast: 90, saturation: 80, sepia: 30, hueRotate: 0, blur: 0 } },
+    { id: 'bw', name: 'Mono', icon: '🖤', settings: { brightness: 100, contrast: 120, saturation: 0, sepia: 0, hueRotate: 0, blur: 0 } },
+    { id: 'dreamy', name: 'Dreamy', icon: '☁️', settings: { brightness: 110, contrast: 90, saturation: 90, sepia: 10, hueRotate: 0, blur: 1.5 } },
+    { id: 'sunset', name: 'Sunset', icon: '🌅', settings: { brightness: 100, contrast: 100, saturation: 120, sepia: 0, hueRotate: 340, blur: 0 } },
+    { id: 'cool', name: 'Cool', icon: '🧊', settings: { brightness: 100, contrast: 100, saturation: 110, sepia: 0, hueRotate: 180, blur: 0 } },
+    { id: 'warm', name: 'Warm', icon: '🔥', settings: { brightness: 105, contrast: 105, saturation: 115, sepia: 15, hueRotate: 10, blur: 0 } },
+    { id: 'glow', name: 'Glow', icon: '💡', settings: { brightness: 120, contrast: 95, saturation: 105, sepia: 0, hueRotate: 0, blur: 0.8 } }
 ];
 
 export function applyFiltersToCtx(ctx, settings) {
@@ -20,7 +22,7 @@ export function applyFiltersToCtx(ctx, settings) {
   `.trim().replace(/\s+/g, ' ');
 }
 
-export function drawFilteredFrame(video, canvas, ctx, settings) {
+export function drawFilteredFrame(video, canvas, ctx, settings, effectFn) {
     if (!video || !canvas || !ctx || video.readyState < 2) return;
 
     ctx.save();
@@ -49,4 +51,12 @@ export function drawFilteredFrame(video, canvas, ctx, settings) {
 
     ctx.drawImage(video, offsetX, offsetY, drawWidth, drawHeight, 0, 0, canvas.width, canvas.height);
     ctx.restore();
+
+    // Draw effect overlay (not mirrored)
+    if (effectFn && typeof effectFn === 'function') {
+        ctx.save();
+        ctx.filter = 'none';
+        effectFn(ctx, canvas.width, canvas.height, performance.now());
+        ctx.restore();
+    }
 }
