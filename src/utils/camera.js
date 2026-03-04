@@ -1,12 +1,12 @@
 export async function getCamera() {
-    // Detect mobile and request appropriate resolution
-    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-
+    // Don't force specific resolution — let the browser/device pick the best one.
+    // Forcing portrait dimensions on mobile causes the browser to return a landscape
+    // stream and the cover-crop logic then zooms in massively.
     const constraints = {
         video: {
             facingMode: "user",
-            width: { ideal: isMobile ? 720 : 1280 },
-            height: { ideal: isMobile ? 1280 : 720 }
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
         }
     };
 

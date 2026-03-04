@@ -53,15 +53,12 @@ export function createBoothScreen() {
         : "relative aspect-square md:aspect-video w-full max-w-5xl rounded-[2rem] md:rounded-[2.5rem] overflow-hidden shadow-2xl bg-black border border-white/10";
 
     const canvas = document.createElement('canvas');
-    canvas.className = "w-full h-full object-cover";
-    // Dynamic canvas sizing for mobile
-    if (mobile) {
-        canvas.width = 720;
-        canvas.height = 1280;
-    } else {
-        canvas.width = 1280;
-        canvas.height = 720;
-    }
+    canvas.className = "w-full h-full";
+    canvas.style.objectFit = "cover";
+    // Start with placeholder size — drawFilteredFrame will auto-resize
+    // the canvas to match the actual video stream dimensions (no zoom/crop)
+    canvas.width = 640;
+    canvas.height = 480;
     const ctx = canvas.getContext('2d');
 
     const video = document.createElement('video');

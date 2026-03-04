@@ -22,8 +22,23 @@ export function applyFiltersToCtx(ctx, settings) {
   `.trim().replace(/\s+/g, ' ');
 }
 
+/**
+ * Draw the video frame onto the canvas with filters and optional effect overlay.
+ * 
+ * The canvas is always set to the video's native resolution (no cropping).
+ * CSS `object-fit: cover` on the <canvas> handles the visual presentation 
+ * inside the container, so the user sees a full, natural camera view — 
+ * exactly like a native camera app.
+ */
 export function drawFilteredFrame(video, canvas, ctx, settings, effectFn) {
     if (!video || !canvas || !ctx || video.readyState < 2) return;
+
+    // Sync canvas resolution to video's actual stream dimensions.
+    // This is the key fix — no more mismatch between canvas and video = no zoom.
+    if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+    }
 
     ctx.save();
     // Mirror for selfie mode
@@ -32,24 +47,8 @@ export function drawFilteredFrame(video, canvas, ctx, settings, effectFn) {
 
     applyFiltersToCtx(ctx, settings);
 
-    const videoAspect = video.videoWidth / video.videoHeight;
-    const canvasAspect = canvas.width / canvas.height;
-
-    let drawWidth, drawHeight, offsetX, offsetY;
-
-    if (videoAspect > canvasAspect) {
-        drawHeight = video.videoHeight;
-        drawWidth = video.videoHeight * canvasAspect;
-        offsetX = (video.videoWidth - drawWidth) / 2;
-        offsetY = 0;
-    } else {
-        drawWidth = video.videoWidth;
-        drawHeight = video.videoWidth / canvasAspect;
-        offsetX = 0;
-        offsetY = (video.videoHeight - drawHeight) / 2;
-    }
-
-    ctx.drawImage(video, offsetX, offsetY, drawWidth, drawHeight, 0, 0, canvas.width, canvas.height);
+    // Draw the FULL video frame — no cropping at all
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     ctx.restore();
 
     // Draw effect overlay (not mirrored)
