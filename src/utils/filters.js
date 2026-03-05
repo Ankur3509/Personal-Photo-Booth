@@ -30,11 +30,10 @@ export function applyFiltersToCtx(ctx, settings) {
  * inside the container, so the user sees a full, natural camera view — 
  * exactly like a native camera app.
  */
-export function drawFilteredFrame(video, canvas, ctx, settings, effectFn) {
+export function drawFilteredFrame(video, canvas, ctx, settings, effectFn, trackingData) {
     if (!video || !canvas || !ctx || video.readyState < 2) return;
 
     // Sync canvas resolution to video's actual stream dimensions.
-    // This is the key fix — no more mismatch between canvas and video = no zoom.
     if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
@@ -47,7 +46,7 @@ export function drawFilteredFrame(video, canvas, ctx, settings, effectFn) {
 
     applyFiltersToCtx(ctx, settings);
 
-    // Draw the FULL video frame — no cropping at all
+    // Draw the FULL video frame
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     ctx.restore();
 
@@ -55,7 +54,7 @@ export function drawFilteredFrame(video, canvas, ctx, settings, effectFn) {
     if (effectFn && typeof effectFn === 'function') {
         ctx.save();
         ctx.filter = 'none';
-        effectFn(ctx, canvas.width, canvas.height, performance.now());
+        effectFn(ctx, canvas.width, canvas.height, performance.now(), trackingData);
         ctx.restore();
     }
 }

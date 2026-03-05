@@ -1,6 +1,5 @@
 /**
  * Snapchat-style visual effects that draw overlays on the canvas.
- * These are real-time effects drawn on each frame.
  */
 
 export const effectPresets = [
@@ -32,7 +31,7 @@ export const effectPresets = [
         id: 'star_crown',
         name: 'Star Crown',
         icon: '👑',
-        draw: (ctx, w, h, t) => drawStarCrown(ctx, w, h, t)
+        draw: (ctx, w, h, t, trackingData) => drawStarCrown(ctx, w, h, t, trackingData)
     },
     {
         id: 'neon_frame',
@@ -45,6 +44,43 @@ export const effectPresets = [
         name: 'Snowfall',
         icon: '❄️',
         draw: (ctx, w, h, t) => drawSnowfall(ctx, w, h, t)
+    },
+    // ─── NEW CUTE FACE FILTERS ───
+    {
+        id: 'face_glow',
+        name: 'Face Glow',
+        icon: '🌟',
+        draw: (ctx, w, h, t, trackingData) => drawFaceGlow(ctx, w, h, t, trackingData)
+    },
+    {
+        id: 'flower_crown',
+        name: 'Flowers',
+        icon: '🌸',
+        draw: (ctx, w, h, t, trackingData) => drawFlowerCrown(ctx, w, h, t, trackingData)
+    },
+    {
+        id: 'bunny_face',
+        name: 'Bunny',
+        icon: '🐰',
+        draw: (ctx, w, h, t, trackingData) => drawBunnyFace(ctx, w, h, t, trackingData)
+    },
+    {
+        id: 'cat_face',
+        name: 'Kitty',
+        icon: '🐱',
+        draw: (ctx, w, h, t, trackingData) => drawCatFace(ctx, w, h, t, trackingData)
+    },
+    {
+        id: 'curly_sparkles',
+        name: 'Curls',
+        icon: '💫',
+        draw: (ctx, w, h, t, trackingData) => drawCurlySparkles(ctx, w, h, t, trackingData)
+    },
+    {
+        id: 'cute_nose_dots',
+        name: 'Freckles',
+        icon: '🐾',
+        draw: (ctx, w, h, t, trackingData) => drawCuteNoseDots(ctx, w, h, t, trackingData)
     }
 ];
 
@@ -215,21 +251,14 @@ function drawButterflies(ctx, w, h, t) {
 }
 
 // ─── Star Crown Effect ───
-function drawStarCrown(ctx, w, h, t) {
-    const crownY = h * 0.08;
-    const centerX = w / 2;
-    const crownWidth = w * 0.5;
+function drawStarCrown(ctx, w, h, t, trackingData) {
+    const face = trackingData ? getFaceCoordsFromTracking(trackingData) : getFaceRegion(w, h);
+    const crownY = face.foreheadY || (h * 0.08);
+    const centerX = face.cx || (w / 2);
+    const crownWidth = face.faceW * 1.5 || (w * 0.5);
 
     ctx.save();
     ctx.globalAlpha = 0.85;
-
-    // Draw golden arc
-    const grad = ctx.createLinearGradient(centerX - crownWidth / 2, crownY, centerX + crownWidth / 2, crownY);
-    grad.addColorStop(0, 'rgba(255, 215, 0, 0)');
-    grad.addColorStop(0.3, 'rgba(255, 215, 0, 0.6)');
-    grad.addColorStop(0.5, 'rgba(255, 215, 0, 0.9)');
-    grad.addColorStop(0.7, 'rgba(255, 215, 0, 0.6)');
-    grad.addColorStop(1, 'rgba(255, 215, 0, 0)');
 
     // Stars along an arc
     const starCount = 7;
@@ -239,7 +268,7 @@ function drawStarCrown(ctx, w, h, t) {
         const rx = crownWidth * 0.6;
         const ry = crownWidth * 0.25;
         const sx = centerX + Math.cos(Math.PI - angle) * rx;
-        const sy = crownY + h * 0.05 - Math.sin(angle) * ry;
+        const sy = crownY + h * 0.02 - Math.sin(angle) * ry;
         const bounce = Math.sin(t / 500 + i * 0.8) * 4;
         const starSize = 8 + Math.sin(t / 400 + i) * 3;
 
@@ -272,7 +301,6 @@ function drawStar(ctx, x, y, size, color) {
 function drawNeonFrame(ctx, w, h, t) {
     const pad = 20;
     const hue = (t / 15) % 360;
-    const innerPad = 30;
 
     ctx.save();
 
@@ -373,4 +401,246 @@ function drawSnowfall(ctx, w, h, t) {
 
         ctx.restore();
     });
+}
+
+// ═══════════════════════════════════════════════════════
+// ─── TRACKING HELPERS ──────────
+// ═══════════════════════════════════════════════════════
+
+function getFaceCoordsFromTracking(track) {
+    // 0: Right Eye (appears right-ish on screen)
+    // 1: Left Eye (appears left-ish on screen)
+    const rightEye = track.landmarks[0];
+    const leftEye = track.landmarks[1];
+
+    // Rotation: Angle between the eyes
+    // Using (Right - Left) to get a natural rotation angle for the head tilt
+    const dy = rightEye.y - leftEye.y;
+    const dx = rightEye.x - leftEye.x;
+    const rotation = Math.atan2(dy, dx);
+
+    return {
+        cx: track.cx,
+        cy: track.cy,
+        faceW: track.w,
+        faceH: track.h,
+        eyeY: (rightEye.y + leftEye.y) / 2,
+        noseY: track.landmarks[2].y,
+        mouthY: track.landmarks[3].y,
+        foreheadY: track.cy - track.h * 0.55,
+        rotation: rotation
+    };
+}
+
+function getFaceRegion(w, h) {
+    return {
+        cx: w * 0.5,
+        cy: h * 0.40,
+        faceW: w * 0.35,
+        faceH: h * 0.35,
+        eyeY: h * 0.35,
+        noseY: h * 0.45,
+        mouthY: h * 0.52,
+        foreheadY: h * 0.25,
+        rotation: 0
+    };
+}
+
+// ═══════════════════════════════════════════════════════
+// ─── CUTE FACE FILTERS with TRACKING ──────────
+// ═══════════════════════════════════════════════════════
+
+// ─── Face Glow / Beauty Enhance ───
+function drawFaceGlow(ctx, w, h, t, trackingData) {
+    const face = trackingData ? getFaceCoordsFromTracking(trackingData) : getFaceRegion(w, h);
+    ctx.save();
+    // Radial glow on face
+    const glowRadius = face.faceW * 1.5;
+    const gradient = ctx.createRadialGradient(face.cx, face.cy, 0, face.cx, face.cy, glowRadius);
+    gradient.addColorStop(0, 'rgba(255, 220, 240, 0.15)');
+    gradient.addColorStop(1, 'rgba(255, 150, 200, 0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, w, h);
+
+    // Sparkle halo around head
+    const sparkleCount = 10;
+    for (let i = 0; i < sparkleCount; i++) {
+        const angle = (i / sparkleCount) * Math.PI * 2 + t / 2000;
+        const radius = face.faceW * 0.75;
+        const sx = face.cx + Math.cos(angle) * radius;
+        const sy = face.cy + Math.sin(angle) * radius * 0.8;
+        ctx.fillStyle = `hsla(${(t / 20 + i * 40) % 360}, 100%, 90%, 0.6)`;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 3 + Math.sin(t / 300 + i) * 2, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.restore();
+}
+
+// ─── Flower Crown ───
+function drawFlowerCrown(ctx, w, h, t, trackingData) {
+    const face = trackingData ? getFaceCoordsFromTracking(trackingData) : getFaceRegion(w, h);
+    const crownY = face.foreheadY;
+    const crownWidth = face.faceW * 1.4;
+
+    ctx.save();
+    ctx.translate(face.cx, face.cy);
+    ctx.rotate(face.rotation);
+    ctx.translate(-face.cx, -face.cy);
+
+    // Flowers along an arc on forehead
+    const flowerCount = 6;
+    for (let i = 0; i < flowerCount; i++) {
+        const frac = i / (flowerCount - 1);
+        const angle = Math.PI + frac * Math.PI;
+        const ax = face.cx + Math.cos(angle) * (crownWidth * 0.45);
+        const ay = crownY + 10 - Math.sin(frac * Math.PI) * 20;
+        const fSize = 15 + Math.sin(t / 400 + i) * 3;
+
+        ctx.fillStyle = `hsla(${330 + i * 15}, 80%, 70%, 0.9)`;
+        ctx.beginPath();
+        for (let p = 0; p < 5; p++) {
+            const pa = (p / 5) * Math.PI * 2;
+            ctx.ellipse(ax + Math.cos(pa) * fSize * 0.5, ay + Math.sin(pa) * fSize * 0.5, fSize * 0.4, fSize * 0.2, pa, 0, Math.PI * 2);
+        }
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(ax, ay, fSize * 0.2, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+}
+
+// ─── Bunny Face ───
+function drawBunnyFace(ctx, w, h, t, trackingData) {
+    const face = trackingData ? getFaceCoordsFromTracking(trackingData) : getFaceRegion(w, h);
+    ctx.save();
+    ctx.translate(face.cx, face.cy);
+    ctx.rotate(face.rotation);
+    ctx.translate(-face.cx, -face.cy);
+
+    const earH = face.faceH * 0.8;
+    const earW = face.faceW * 0.2;
+
+    // Ears
+    for (let side of [-1, 1]) {
+        const ex = face.cx + side * face.faceW * 0.25;
+        // Anchoring the bottom of the ear to foreheadY
+        const ey = face.foreheadY - earH * 0.85;
+        const bounce = Math.sin(t / 300 + side) * 5;
+
+        ctx.fillStyle = '#fffafb';
+        ctx.beginPath();
+        // Ellipse center is ey, so we draw it completely above the forehead
+        ctx.ellipse(ex, ey + bounce, earW, earH, side * 0.1, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#ffc0cb';
+        ctx.beginPath();
+        ctx.ellipse(ex, ey + bounce + earH * 0.1, earW * 0.5, earH * 0.7, side * 0.1, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Nose
+    const noseY = face.noseY;
+    ctx.fillStyle = '#ff82aa';
+    ctx.beginPath();
+    ctx.ellipse(face.cx, noseY, face.faceW * 0.08, face.faceW * 0.06, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Whiskers
+    ctx.strokeStyle = '#ffc0cb77'; ctx.lineWidth = 2;
+    for (let i = 0; i < 3; i++) {
+        for (let s of [-1, 1]) {
+            ctx.beginPath();
+            ctx.moveTo(face.cx + s * 10, noseY);
+            ctx.lineTo(face.cx + s * face.faceW * 0.5, noseY + (i - 1) * 10);
+            ctx.stroke();
+        }
+    }
+    ctx.restore();
+}
+
+// ─── Cat Face ───
+function drawCatFace(ctx, w, h, t, trackingData) {
+    const face = trackingData ? getFaceCoordsFromTracking(trackingData) : getFaceRegion(w, h);
+    ctx.save();
+    ctx.translate(face.cx, face.cy);
+    ctx.rotate(face.rotation);
+    ctx.translate(-face.cx, -face.cy);
+
+    // Triangle ears
+    const earS = face.faceW * 0.3;
+    for (let s of [-1, 1]) {
+        const ex = face.cx + s * face.faceW * 0.35;
+        const ey = face.foreheadY;
+        ctx.fillStyle = '#333';
+        ctx.beginPath();
+        ctx.moveTo(ex, ey);
+        ctx.lineTo(ex - s * earS * 0.5, ey - earS);
+        ctx.lineTo(ex + s * earS * 0.5, ey);
+        ctx.fill();
+        ctx.fillStyle = '#ffc0cb';
+        ctx.beginPath();
+        ctx.moveTo(ex, ey - 5);
+        ctx.lineTo(ex - s * earS * 0.3, ey - earS * 0.7);
+        ctx.lineTo(ex + s * earS * 0.3, ey - 5);
+        ctx.fill();
+    }
+
+    // Nose & Whiskers
+    const ny = face.noseY;
+    ctx.fillStyle = '#111';
+    ctx.beginPath(); ctx.arc(face.cx, ny, 8, 0, Math.PI * 2); ctx.fill();
+
+    ctx.strokeStyle = '#ffffffaa'; ctx.lineWidth = 2;
+    for (let i = 0; i < 3; i++) {
+        for (let s of [-1, 1]) {
+            ctx.beginPath();
+            ctx.moveTo(face.cx + s * 5, ny + 5);
+            ctx.lineTo(face.cx + s * face.faceW * 0.6, ny + (i - 1) * 15);
+            ctx.stroke();
+        }
+    }
+    ctx.restore();
+}
+
+// ─── Curly Sparkles ───
+function drawCurlySparkles(ctx, w, h, t, trackingData) {
+    const face = trackingData ? getFaceCoordsFromTracking(trackingData) : getFaceRegion(w, h);
+    ctx.save();
+    const count = 8;
+    for (let i = 0; i < count; i++) {
+        const angle = (i / count) * Math.PI * 2 + t / 4000;
+        const radius = face.faceW * 0.75 + Math.sin(t / 800 + i) * 10;
+        const cx = face.cx + Math.cos(angle) * radius;
+        const cy = face.cy + Math.sin(angle) * radius * 0.8;
+
+        ctx.strokeStyle = `hsla(${(t / 10 + i * 45) % 360}, 80%, 80%, 0.6)`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        for (let s = 0; s < 10; s++) {
+            const sa = s * 0.6; const sr = s * 1.5;
+            ctx.lineTo(cx + Math.cos(sa) * sr, cy + Math.sin(sa) * sr);
+        }
+        ctx.stroke();
+    }
+    ctx.restore();
+}
+
+// ─── Cute Nose Dots / Freckles ───
+function drawCuteNoseDots(ctx, w, h, t, trackingData) {
+    const face = trackingData ? getFaceCoordsFromTracking(trackingData) : getFaceRegion(w, h);
+    ctx.save();
+    const dots = 12;
+    for (let i = 0; i < dots; i++) {
+        const side = i % 2 === 0 ? -1 : 1;
+        const dx = face.cx + side * (face.faceW * 0.15 + Math.random() * 20);
+        const dy = face.noseY + (Math.random() - 0.5) * 15;
+        ctx.fillStyle = `rgba(255, 150, 180, ${0.4 + Math.sin(t / 500 + i) * 0.2})`;
+        ctx.beginPath(); ctx.arc(dx, dy, 3, 0, Math.PI * 2); ctx.fill();
+    }
+    // Pink heart nose
+    ctx.fillStyle = '#ff7bac';
+    drawHeart(ctx, face.cx, face.noseY - 5, 12);
+    ctx.fill();
+    ctx.restore();
 }

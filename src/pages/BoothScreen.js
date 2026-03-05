@@ -4,6 +4,7 @@ import { drawFilteredFrame, filterPresets } from '../utils/filters';
 import { effectPresets } from '../utils/effects';
 import { composeFinalImage } from '../utils/templateEngine';
 import { savePhoto } from '../utils/gallery';
+import { initFaceTracker, processVideo, getTrackingData } from '../utils/faceTracker';
 
 export function createBoothScreen() {
     const template = state.selectedTemplate;
@@ -14,6 +15,10 @@ export function createBoothScreen() {
 
     const mobile = isMobileDevice();
     let activeEffect = effectPresets[0]; // 'none' by default
+    let isPreviewing = false; // tracks whether we're in preview mode
+
+    // ─── INITIALIZE FACE TRACKING ───
+    initFaceTracker().catch(err => console.error("Face tracker init failed:", err));
 
     const section = document.createElement('section');
     section.className = mobile
@@ -55,8 +60,6 @@ export function createBoothScreen() {
     const canvas = document.createElement('canvas');
     canvas.className = "w-full h-full";
     canvas.style.objectFit = "cover";
-    // Start with placeholder size — drawFilteredFrame will auto-resize
-    // the canvas to match the actual video stream dimensions (no zoom/crop)
     canvas.width = 640;
     canvas.height = 480;
     const ctx = canvas.getContext('2d');
@@ -88,35 +91,140 @@ export function createBoothScreen() {
     boothContainer.appendChild(overlay);
     boothContainer.appendChild(banner);
 
-    // ═══ BOTTOM CONTROLS (Snapchat style - overlaid on camera for mobile) ═══
+    // ═══════════════════════════════════════════════════
+    // ═══ PHOTO PREVIEW OVERLAY ═══
+    // ═══════════════════════════════════════════════════
+    const previewOverlay = document.createElement('div');
+    previewOverlay.className = "absolute inset-0 z-[70] flex flex-col items-center justify-center bg-black/90 backdrop-blur-md animate-fade-in";
+    previewOverlay.style.display = 'none';
+
+    // Preview image
+    const previewImg = document.createElement('img');
+    previewImg.className = mobile
+        ? "max-w-[90%] max-h-[60vh] rounded-3xl shadow-[0_0_50px_rgba(255,255,255,0.15)] border border-white/20 object-contain animate-scale-in"
+        : "max-w-[70%] max-h-[60vh] rounded-[2.5rem] shadow-[0_0_60px_rgba(255,255,255,0.2)] border border-white/20 object-contain animate-scale-in";
+
+    // Preview label
+    const previewLabel = document.createElement('div');
+    previewLabel.className = "text-white text-xl font-bold tracking-tight mt-6 mb-1";
+    previewLabel.innerText = "Check your shot! ✨";
+
+    // Preview subtitle
+    const previewSub = document.createElement('div');
+    previewSub.className = "text-white/60 text-sm font-medium mb-8";
+    previewSub.innerText = "Does this look good?";
+
+    // Button row
+    const previewBtnRow = document.createElement('div');
+    previewBtnRow.className = "flex gap-4 items-center";
+
+    // Retake button
+    const retakeBtn = document.createElement('button');
+    retakeBtn.className = "px-6 py-3 bg-white/10 hover:bg-white/20 border border-white/20 rounded-full text-white font-bold transition-all flex items-center gap-2 active:scale-95 backdrop-blur-md";
+    retakeBtn.innerHTML = `<span>🔄</span> Retake`;
+
+    // Confirm button
+    const confirmBtn = document.createElement('button');
+    confirmBtn.className = "px-8 py-3.5 bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-400 hover:to-purple-400 rounded-full text-white font-bold transition-all flex items-center gap-2 active:scale-95 shadow-lg shadow-pink-500/30 animate-pulse-confirm";
+    confirmBtn.innerHTML = `<span>✅</span> Confirm`;
+
+    previewBtnRow.appendChild(retakeBtn);
+    previewBtnRow.appendChild(confirmBtn);
+
+    previewOverlay.appendChild(previewImg);
+    previewOverlay.appendChild(previewLabel);
+    previewOverlay.appendChild(previewSub);
+    previewOverlay.appendChild(previewBtnRow);
+    boothContainer.appendChild(previewOverlay);
+
+    // ════ Preview Logic ════
+    let pendingPhotoData = null;
+
+    function showPreview(photoData) {
+        isPreviewing = true;
+        pendingPhotoData = photoData;
+        previewImg.src = photoData;
+        previewOverlay.style.display = 'flex';
+        const photoNum = state.photos.length + 1;
+        previewSub.innerText = `Photo ${photoNum} of ${template.requiredPhotos} — Confirm this photo or retake`;
+    }
+
+    function hidePreview() {
+        isPreviewing = false;
+        pendingPhotoData = null;
+        previewOverlay.style.display = 'none';
+    }
+
+    retakeBtn.onclick = () => {
+        hidePreview();
+        state.isCapturing = false;
+        captureBtn.disabled = false;
+        captureBtn.classList.remove('opacity-50', 'scale-90');
+        captureBtn.innerHTML = `<div class="w-full h-full bg-white rounded-full transition-transform group-hover:scale-95 group-active:scale-90"></div>`;
+    };
+
+    confirmBtn.onclick = async () => {
+        if (!pendingPhotoData) return;
+        confirmBtn.disabled = true;
+        confirmBtn.innerHTML = `<div class="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div> Processing...`;
+
+        state.photos.push(pendingPhotoData);
+        hidePreview();
+
+        const dots = progress.querySelectorAll('div');
+        dots.forEach((dot, i) => {
+            if (i < state.photos.length) {
+                dot.classList.remove('bg-white/20');
+                dot.classList.add('bg-pink-400', 'scale-110', 'shadow-lg', 'shadow-pink-400/50');
+            }
+        });
+
+        if (state.photos.length >= template.requiredPhotos) {
+            banner.innerText = "✨ Processing...";
+            captureBtn.innerHTML = `<div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-white"></div>`;
+            stopCamera(state.cameraStream);
+            state.cameraStream = null;
+
+            try {
+                const finalImg = await composeFinalImage(template, state.photos);
+                await savePhoto(finalImg, template.id, { ...state.filterSettings });
+                state.isCapturing = false;
+                navigateTo('gallery');
+            } catch (err) {
+                console.error("Composition error:", err);
+                alert("Oops! Something went wrong during composition. Try again.");
+                navigateTo('template');
+            }
+        } else {
+            banner.innerText = `📷 ${state.photos.length + 1} / ${template.requiredPhotos}`;
+            state.isCapturing = false;
+            captureBtn.disabled = false;
+            captureBtn.classList.remove('opacity-50', 'scale-90');
+            captureBtn.innerHTML = `<div class="w-full h-full bg-white rounded-full transition-transform group-hover:scale-95 group-active:scale-90"></div>`;
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = `<span>✅</span> Confirm`;
+        }
+    };
+
+    // ═══ BOTTOM CONTROLS (Snapchat style) ═══
     const controlsWrapper = document.createElement('div');
     controlsWrapper.className = mobile
         ? "absolute bottom-0 left-0 right-0 z-40 flex flex-col items-center pb-6 pt-2"
         : "w-full flex flex-col items-center gap-3 mt-2";
 
-    // ── Effect Selector (Snapchat style circles) ──
+    // Effect Selector
     const effectRow = document.createElement('div');
     effectRow.className = "w-full flex flex-col gap-1 mb-3";
-
     const effectLabel = document.createElement('span');
     effectLabel.className = "text-[9px] uppercase tracking-widest text-white/40 font-bold ml-4";
     effectLabel.innerText = "Effects";
-
     const effectList = document.createElement('div');
     effectList.className = "flex overflow-x-auto gap-3 px-4 pb-1 no-scrollbar scroll-smooth";
-
     effectPresets.forEach(preset => {
         const btn = document.createElement('button');
         const isActive = activeEffect.id === preset.id;
-
-        btn.className = `flex-shrink-0 w-12 h-12 rounded-full border-2 transition-all flex flex-col items-center justify-center ${isActive
-            ? 'border-pink-400 bg-pink-500/20 scale-110 shadow-lg shadow-pink-400/30'
-            : 'border-white/15 bg-white/5 hover:border-white/30'}`;
-        btn.innerHTML = `
-            <span class="text-lg">${preset.icon}</span>
-            <span class="text-[7px] font-bold text-white/60 mt-0.5">${preset.name}</span>
-        `;
-
+        btn.className = `flex-shrink-0 w-12 h-12 rounded-full border-2 transition-all flex flex-col items-center justify-center ${isActive ? 'border-pink-400 bg-pink-500/20 scale-110 shadow-lg shadow-pink-400/30' : 'border-white/15 bg-white/5 hover:border-white/30'}`;
+        btn.innerHTML = `<span class="text-lg">${preset.icon}</span><span class="text-[7px] font-bold text-white/60 mt-0.5">${preset.name}</span>`;
         btn.onclick = () => {
             activeEffect = preset;
             Array.from(effectList.children).forEach(child => {
@@ -128,33 +236,22 @@ export function createBoothScreen() {
         };
         effectList.appendChild(btn);
     });
-
     effectRow.appendChild(effectLabel);
     effectRow.appendChild(effectList);
 
-    // ── Filter Selector ──
+    // Filter Selector
     const filterRow = document.createElement('div');
     filterRow.className = "w-full flex flex-col gap-1 mb-3";
-
     const filterLabel = document.createElement('span');
     filterLabel.className = "text-[9px] uppercase tracking-widest text-white/40 font-bold ml-4";
     filterLabel.innerText = "Filters";
-
     const filterList = document.createElement('div');
     filterList.className = "flex overflow-x-auto gap-3 px-4 pb-1 no-scrollbar scroll-smooth";
-
     filterPresets.forEach(preset => {
         const btn = document.createElement('button');
         const isActive = state.filterSettings.id === preset.id || (preset.id === 'normal' && !state.filterSettings.id);
-
-        btn.className = `flex-shrink-0 w-12 h-12 rounded-full border-2 transition-all flex flex-col items-center justify-center ${isActive
-            ? 'border-blue-400 bg-blue-500/20 scale-110 shadow-lg shadow-blue-400/30'
-            : 'border-white/15 bg-white/5 hover:border-white/30'}`;
-        btn.innerHTML = `
-            <span class="text-lg">${preset.icon}</span>
-            <span class="text-[7px] font-bold text-white/60 mt-0.5">${preset.name}</span>
-        `;
-
+        btn.className = `flex-shrink-0 w-12 h-12 rounded-full border-2 transition-all flex flex-col items-center justify-center ${isActive ? 'border-blue-400 bg-blue-500/20 scale-110 shadow-lg shadow-blue-400/30' : 'border-white/15 bg-white/5 hover:border-white/30'}`;
+        btn.innerHTML = `<span class="text-lg">${preset.icon}</span><span class="text-[7px] font-bold text-white/60 mt-0.5">${preset.name}</span>`;
         btn.onclick = () => {
             state.filterSettings = { ...preset.settings, id: preset.id };
             Array.from(filterList.children).forEach(child => {
@@ -166,78 +263,28 @@ export function createBoothScreen() {
         };
         filterList.appendChild(btn);
     });
-
     filterRow.appendChild(filterLabel);
     filterRow.appendChild(filterList);
 
-    // ── Capture Button ──
+    // Capture Button
     const captureRow = document.createElement('div');
     captureRow.className = "flex justify-center pt-2";
-
     const captureBtn = document.createElement('button');
-    captureBtn.className = mobile
-        ? "w-18 h-18 rounded-full border-[5px] border-white bg-transparent active:bg-pink-500 transition-all flex items-center justify-center p-1 group"
-        : "w-20 h-20 md:w-24 md:h-24 rounded-full border-[6px] md:border-8 border-white bg-transparent active:bg-pink-500 transition-all flex items-center justify-center p-1 group";
-    captureBtn.style.width = mobile ? '72px' : '';
-    captureBtn.style.height = mobile ? '72px' : '';
+    captureBtn.className = mobile ? "w-18 h-18 rounded-full border-[5px] border-white bg-transparent active:bg-pink-500 transition-all flex items-center justify-center p-1 group" : "w-20 h-20 md:w-24 md:h-24 rounded-full border-[6px] md:border-8 border-white bg-transparent active:bg-pink-500 transition-all flex items-center justify-center p-1 group";
+    captureBtn.style.width = mobile ? '72px' : ''; captureBtn.style.height = mobile ? '72px' : '';
     captureBtn.innerHTML = `<div class="w-full h-full bg-white rounded-full transition-transform group-hover:scale-95 group-active:scale-90"></div>`;
-
     captureBtn.onclick = () => {
-        if (state.isCapturing) return;
-        state.isCapturing = true;
-        captureBtn.disabled = true;
-        captureBtn.classList.add('opacity-50', 'scale-90');
-
-        overlay.classList.remove('opacity-0');
-        overlay.classList.add('opacity-100');
-
-        countdown(3, (tick) => {
-            timerText.innerText = tick;
-        }, async () => {
-            overlay.classList.remove('opacity-100', 'opacity-0');
-            overlay.classList.add('opacity-0');
-
-            // Visual Flash
-            const flash = document.createElement('div');
-            flash.className = "absolute inset-0 bg-white z-[60]";
-            boothContainer.appendChild(flash);
-            setTimeout(() => flash.remove(), 120);
-
-            // Capture frame
+        if (state.isCapturing || isPreviewing) return;
+        state.isCapturing = true; captureBtn.disabled = true; captureBtn.classList.add('opacity-50', 'scale-90');
+        overlay.classList.remove('opacity-0'); overlay.classList.add('opacity-100');
+        countdown(3, (tick) => { timerText.innerText = tick; }, async () => {
+            overlay.classList.remove('opacity-100', 'opacity-0'); overlay.classList.add('opacity-0');
+            const flash = document.createElement('div'); flash.className = "absolute inset-0 bg-white z-[60]";
+            boothContainer.appendChild(flash); setTimeout(() => flash.remove(), 120);
             const photoData = canvas.toDataURL('image/png', 0.9);
-            state.photos.push(photoData);
-
-            if (state.photos.length >= template.requiredPhotos) {
-                banner.innerText = "✨ Processing...";
-                captureBtn.innerHTML = `<div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-white"></div>`;
-
-                // Stop camera immediately
-                stopCamera(state.cameraStream);
-                state.cameraStream = null;
-
-                try {
-                    console.log("Photos captured:", state.photos.length);
-                    const finalImg = await composeFinalImage(template, state.photos);
-                    console.log("Final image composed");
-                    await savePhoto(finalImg, template.id, { ...state.filterSettings });
-                    console.log("Photo saved to gallery");
-
-                    state.isCapturing = false;
-                    navigateTo('gallery');
-                } catch (err) {
-                    console.error("Composition error:", err);
-                    alert("Oops! Something went wrong during composition. Try again.");
-                    navigateTo('template');
-                }
-            } else {
-                banner.innerText = `📷 ${state.photos.length + 1} / ${template.requiredPhotos}`;
-                state.isCapturing = false;
-                captureBtn.disabled = false;
-                captureBtn.classList.remove('opacity-50', 'scale-90');
-            }
+            showPreview(photoData);
         });
     };
-
     captureRow.appendChild(captureBtn);
 
     controlsWrapper.appendChild(effectRow);
@@ -249,11 +296,13 @@ export function createBoothScreen() {
     getCamera().then(stream => {
         state.cameraStream = stream;
         video.srcObject = stream;
-
-        const loop = () => {
+        const loop = async () => {
             if (state.cameraStream) {
+                // Process face detection every frame
+                await processVideo(video);
+                const trackingData = getTrackingData(canvas.width, canvas.height);
                 const effectFn = activeEffect.draw || null;
-                drawFilteredFrame(video, canvas, ctx, state.filterSettings, effectFn);
+                drawFilteredFrame(video, canvas, ctx, state.filterSettings, effectFn, trackingData);
                 animationFrame = requestAnimationFrame(loop);
             }
         };
@@ -269,16 +318,9 @@ export function createBoothScreen() {
         stopCamera(state.cameraStream);
     };
 
-    // ═══ ASSEMBLE ═══
     section.appendChild(header);
     section.appendChild(boothContainer);
-
-    if (mobile) {
-        // On mobile, controls are overlaid on the camera
-        boothContainer.appendChild(controlsWrapper);
-    } else {
-        section.appendChild(controlsWrapper);
-    }
+    if (mobile) boothContainer.appendChild(controlsWrapper); else section.appendChild(controlsWrapper);
 
     return section;
 }
